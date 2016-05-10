@@ -109,7 +109,7 @@ namespace Lucene.Net.Store.Azure
                 if (!catalogDir.Exists)
                     catalogDir.Create();
 
-                _cacheDirectory = FSDirectory.Open(catalogPath);
+                _cacheDirectory = FSDirectory.Open(catalogDir);
             }
 
             CreateContainer();
@@ -122,7 +122,8 @@ namespace Lucene.Net.Store.Azure
         }
 
         /// <summary>Returns an array of strings, one for each file in the directory. </summary>
-        public override String[] ListAll()
+        [Obsolete("For some Directory implementations (FSDirectory}, and its subclasses), this method silently filters its results to include only index files.  Please use ListAll instead, which does no filtering. ")]
+        public override String[] List()
         {
             var results = from blob in _blobContainer.ListBlobs(_rootFolder)
                           select blob.Uri.AbsolutePath.Substring(blob.Uri.AbsolutePath.LastIndexOf('/') + 1);
@@ -188,6 +189,33 @@ namespace Lucene.Net.Store.Azure
             }
         }
 
+        
+        /// <summary>Renames an existing file in the directory.
+        /// If a file already exists with the new name, then it is replaced.
+        /// This replacement should be atomic. 
+        /// </summary>
+        [Obsolete]
+        public override void RenameFile(System.String from, System.String to)
+        {
+            try
+            {
+                var blobFrom = _blobContainer.GetBlockBlobReference(from);
+                var blobTo = _blobContainer.GetBlockBlobReference(to);
+                blobTo.StartCopyFromBlob(blobFrom);
+                blobFrom.DeleteIfExists();
+
+                // we delete and force a redownload, since we can't do this in an atomic way
+                if (_cacheDirectory.FileExists(from))
+                    _cacheDirectory.RenameFile(from, to);
+
+                // drop old cached data as it's wrong now
+                if (_cacheDirectory.FileExists(from + ".blob"))
+                    _cacheDirectory.DeleteFile(from + ".blob");
+            }
+            catch
+            {
+            }
+        }
 
         /// <summary>Returns the length of a file in the directory. </summary>
         public override long FileLength(String name)
@@ -261,11 +289,18 @@ namespace Lucene.Net.Store.Azure
         }
 
         /// <summary>Closes the store. </summary>
-        protected override void Dispose(bool disposing)
+        public override void Close()
         {
             _blobContainer = null;
             _blobClient = null;
         }
+
+        /// <summary>Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.</summary>
+        public override void Dispose()
+        {
+            this.Close();
+        }
+
 
         public virtual bool ShouldCompressFile(string path)
         {

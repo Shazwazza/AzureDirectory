@@ -46,7 +46,7 @@ namespace Lucene.Net.Store.Azure
             _indexOutput.Flush();
         }
 
-        protected override void Dispose(bool disposing)
+        public override void Close()
         {
             _fileMutex.WaitOne();
             try
@@ -56,8 +56,8 @@ namespace Lucene.Net.Store.Azure
                 // make sure it's all written out
                 _indexOutput.Flush();
 
-                long originalLength = _indexOutput.Length;
-                _indexOutput.Dispose();
+                long originalLength = _indexOutput.Length();
+                _indexOutput.Close();
 
                 Stream blobStream;
 
@@ -109,25 +109,26 @@ namespace Lucene.Net.Store.Azure
             // to pass to the blob storage stuff, so we compress into a memory stream
             MemoryStream compressedStream = new MemoryStream();
 
+            IndexInput indexInput = null;
             try
             {
-                using (var indexInput = CacheDirectory.OpenInput(fileName))
+                indexInput = CacheDirectory.OpenInput(fileName);
                 using (var compressor = new DeflateStream(compressedStream, CompressionMode.Compress, true))
                 {
                     // compress to compressedOutputStream
                     byte[] bytes = new byte[indexInput.Length()];
-                    indexInput.ReadBytes(bytes, 0, (int)bytes.Length);
-                    compressor.Write(bytes, 0, (int)bytes.Length);
+                    indexInput.ReadBytes(bytes, 0, (int) bytes.Length);
+                    compressor.Write(bytes, 0, (int) bytes.Length);
                 }
 
                 // seek back to beginning of comrpessed stream
                 compressedStream.Seek(0, SeekOrigin.Begin);
 
                 Debug.WriteLine(string.Format("COMPRESSED {0} -> {1} {2}% to {3}",
-                   originalLength,
-                   compressedStream.Length,
-                   ((float)compressedStream.Length / (float)originalLength) * 100,
-                   _name));
+                    originalLength,
+                    compressedStream.Length,
+                    ((float) compressedStream.Length/(float) originalLength)*100,
+                    _name));
             }
             catch
             {
@@ -135,15 +136,17 @@ namespace Lucene.Net.Store.Azure
                 compressedStream.Dispose();
                 throw;
             }
+            finally
+            {
+                if (indexInput != null)
+                    indexInput.Close();
+            }
             return compressedStream;
         }
 
-        public override long Length
+        public override long Length()
         {
-            get
-            {
-                return _indexOutput.Length;
-            }
+            return _indexOutput.Length();
         }
 
         public override void WriteByte(byte b)
@@ -161,12 +164,9 @@ namespace Lucene.Net.Store.Azure
             _indexOutput.WriteBytes(b, offset, length);
         }
 
-        public override long FilePointer
+        public override long GetFilePointer()
         {
-            get
-            {
-                return _indexOutput.FilePointer;
-            }
+            return _indexOutput.GetFilePointer();
         }
 
         public override void Seek(long pos)

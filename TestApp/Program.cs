@@ -80,7 +80,7 @@ namespace TestApp
                 int max = Math.Min(hits.TotalHits,100);
                 for (int i = 0; i < max; i++)
                 {
-                    Console.WriteLine(hits.ScoreDocs[i].Doc);
+                    Console.WriteLine(hits.ScoreDocs[i].doc);
                 }
             }
         }

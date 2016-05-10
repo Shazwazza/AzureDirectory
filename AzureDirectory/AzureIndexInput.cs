@@ -192,12 +192,9 @@ namespace Lucene.Net.Store.Azure
             _indexInput.ReadBytes(b, offset, len);
         }
 
-        public override long FilePointer
+        public override long GetFilePointer()
         {
-            get
-            {
-                return _indexInput.FilePointer;
-            }
+            return _indexInput.GetFilePointer();
         }
 
         public override void Seek(long pos)
@@ -205,7 +202,7 @@ namespace Lucene.Net.Store.Azure
             _indexInput.Seek(pos);
         }
 
-        protected override void Dispose(bool disposing)
+        public override void Close()
         {
             _fileMutex.WaitOne();
             try
@@ -213,7 +210,7 @@ namespace Lucene.Net.Store.Azure
 #if FULLDEBUG
                 Debug.WriteLine(String.Format("CLOSED READSTREAM local {0}", _name));
 #endif
-                _indexInput.Dispose();
+                _indexInput.Close();
                 _indexInput = null;
                 _azureDirectory = null;
                 _blobContainer = null;
